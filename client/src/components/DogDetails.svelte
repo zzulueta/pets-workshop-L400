@@ -9,6 +9,7 @@
         description: string;
         gender: string;
         status: 'AVAILABLE' | 'PENDING' | 'ADOPTED';
+        human_age?: number;
     };
 
     // Accept either a dog object or a dogId
@@ -18,12 +19,33 @@
     let loading = true;
     let error: string | null = null;
     let dogData: Dog | null = null;
+    let humanAgeData: { dog_name: string; dog_age: number; human_age: number } | null = null;
+    let humanAgeError: string | null = null;
+    
+    const fetchHumanAge = async (id: number): Promise<void> => {
+        try {
+            const response = await fetch(`/api/dogs/${id}/human-age`);
+            if (response.ok) {
+                humanAgeData = await response.json();
+                if (dogData && humanAgeData) {
+                    dogData.human_age = humanAgeData.human_age;
+                }
+            } else {
+                humanAgeError = `Failed to fetch human age: ${response.status}`;
+            }
+        } catch (err) {
+            humanAgeError = `Error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+    };
     
     onMount(async () => {
         // If dog object is provided directly, use it
         if (dog) {
             dogData = dog;
             loading = false;
+            if (dogData.id) {
+                await fetchHumanAge(dogData.id);
+            }
             return;
         }
         
@@ -33,6 +55,7 @@
                 const response = await fetch(`/api/dogs/${dogId}`);
                 if (response.ok) {
                     dogData = await response.json();
+                    await fetchHumanAge(dogId);
                 } else {
                     error = `Failed to fetch dog: ${response.status} ${response.statusText}`;
                 }
@@ -75,14 +98,21 @@
             
             <div class="grid grid-cols-2 gap-4 mb-6 mt-4">
                 <div class="flex items-center">
-                    <p class="text-slate-300">Breed: {dogData.breed}</p>
+                    <p class="text-slate-300" aria-label="Dog breed">Breed: {dogData.breed}</p>
                 </div>
                 <div class="flex items-center">
-                    <p class="text-slate-300">Age: {dogData.age} {dogData.age === 1 ? 'year' : 'years'}</p>
+                    <p class="text-slate-300" aria-label="Dog age in years">Age: {dogData.age} {dogData.age === 1 ? 'year' : 'years'}</p>
                 </div>
                 <div class="flex items-center">
-                    <p class="text-slate-300">Gender: {dogData.gender}</p>
+                    <p class="text-slate-300" aria-label="Dog gender">Gender: {dogData.gender}</p>
                 </div>
+                {#if dogData.human_age !== undefined && !humanAgeError}
+                <div class="flex items-center col-span-2">
+                    <div class="bg-blue-500/20 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-lg w-full transition-all duration-300 ease-in-out" aria-label="Dog age in human years">
+                        <span class="font-semibold">🐕 Human Age:</span> {dogData.human_age} {dogData.human_age === 1 ? 'year' : 'years'}
+                    </div>
+                </div>
+                {/if}
             </div>
             
             <h2 class="text-lg font-semibold text-slate-200 mb-2">About {dogData.name}</h2>
