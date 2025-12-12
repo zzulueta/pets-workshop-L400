@@ -1,22 +1,79 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import FilterPanel from "./FilterPanel.svelte";
 
     interface Dog {
         id: number;
         name: string;
         breed: string;
+        age: number;
+        gender: string;
+        status: string;
     }
 
-    export let dogs: Dog[] = [];
-    let loading = true;
-    let error: string | null = null;
+    interface FilterState {
+        search: string;
+        breeds: string[];
+        ageRange: string;
+        gender: string;
+        status: string;
+    }
 
-    const fetchDogs = async () => {
+    let dogs: Dog[] = $state([]);
+    let loading = $state(true);
+    let error: string | null = $state(null);
+    let totalCount = $state(0);
+
+    const ageRanges: Record<string, { min: number | null; max: number | null }> = {
+        'all': { min: null, max: null },
+        'puppy': { min: 0, max: 1 },
+        'young': { min: 1, max: 3 },
+        'adult': { min: 3, max: 7 },
+        'senior': { min: 7, max: null }
+    };
+
+    const fetchDogs = async (filters?: FilterState) => {
         loading = true;
+        error = null;
+        
         try {
-            const response = await fetch('/api/dogs');
+            const params = new URLSearchParams();
+            
+            if (filters) {
+                if (filters.search) {
+                    params.set('search', filters.search);
+                }
+                
+                if (filters.breeds.length > 0) {
+                    params.set('breed', filters.breeds.join(','));
+                }
+                
+                if (filters.ageRange && filters.ageRange !== 'all') {
+                    const range = ageRanges[filters.ageRange];
+                    if (range.min !== null) params.set('age_min', range.min.toString());
+                    if (range.max !== null) params.set('age_max', range.max.toString());
+                }
+                
+                if (filters.gender && filters.gender !== 'Any') {
+                    params.set('gender', filters.gender);
+                }
+                
+                if (filters.status) {
+                    params.set('status', filters.status);
+                }
+            } else {
+                // Default filter: show only available dogs
+                params.set('status', 'AVAILABLE');
+            }
+
+            const queryString = params.toString();
+            const url = queryString ? `/api/dogs?${queryString}` : '/api/dogs';
+            
+            const response = await fetch(url);
             if(response.ok) {
-                dogs = await response.json();
+                const data = await response.json();
+                dogs = data.dogs || [];
+                totalCount = data.total || 0;
             } else {
                 error = `Failed to fetch data: ${response.status} ${response.statusText}`;
             }
@@ -27,13 +84,30 @@
         }
     };
 
+    function handleFilterChange(filters: FilterState) {
+        fetchDogs(filters);
+    }
+
     onMount(() => {
-        fetchDogs();
+        // Initial load will be handled by FilterPanel's URL parsing
+        const params = new URLSearchParams(window.location.search);
+        const hasFilters = params.toString().length > 0;
+        
+        if (!hasFilters) {
+            // Default to showing available dogs
+            fetchDogs({ search: '', breeds: [], ageRange: 'all', gender: 'Any', status: 'AVAILABLE' });
+        }
     });
 </script>
 
 <div>
     <h2 class="text-2xl font-medium mb-6 text-slate-100">Available Dogs</h2>
+    
+    <FilterPanel 
+        onFilterChange={handleFilterChange}
+        dogCount={dogs.length}
+        totalCount={totalCount}
+    />
     
     {#if loading}
         <!-- loading animation -->
@@ -58,7 +132,11 @@
     {:else if dogs.length === 0}
         <!-- no dogs found -->
         <div class="text-center py-12 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700">
-            <p class="text-slate-300">No dogs available at the moment.</p>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 class="text-xl font-semibold text-slate-300 mb-2">No dogs match your search criteria</h3>
+            <p class="text-slate-400 mb-6">Try adjusting your filters to see more results</p>
         </div>
     {:else}
         <!-- dog list -->
@@ -71,8 +149,22 @@
                     <div class="p-6 relative">
                         <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                         <div class="relative z-10">
-                            <h3 class="text-xl font-semibold text-slate-100 mb-2 group-hover:text-blue-400 transition-colors">{dog.name}</h3>
-                            <p class="text-slate-400 mb-4">{dog.breed}</p>
+                            <div class="flex items-start justify-between mb-2">
+                                <h3 class="text-xl font-semibold text-slate-100 group-hover:text-blue-400 transition-colors">{dog.name}</h3>
+                                {#if dog.status === 'AVAILABLE'}
+                                    <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full">Available</span>
+                                {:else if dog.status === 'PENDING'}
+                                    <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-medium rounded-full">Pending</span>
+                                {:else if dog.status === 'ADOPTED'}
+                                    <span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs font-medium rounded-full">Adopted</span>
+                                {/if}
+                            </div>
+                            <p class="text-slate-400 mb-2">{dog.breed}</p>
+                            <div class="flex items-center gap-4 text-sm text-slate-500 mb-4">
+                                <span>{dog.age} {dog.age === 1 ? 'year' : 'years'} old</span>
+                                <span>•</span>
+                                <span>{dog.gender}</span>
+                            </div>
                             <div class="mt-4 text-sm text-blue-400 font-medium flex items-center">
                                 <span>View details</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1 transform transition-transform duration-300 group-hover:translate-x-2" viewBox="0 0 20 20" fill="currentColor">
