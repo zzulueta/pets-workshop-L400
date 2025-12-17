@@ -9,5 +9,11 @@
         "devcontainers",
         "prebuild"
     ],
-    "github.copilot.nextEditSuggestions.enabled": true,    
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "python.testing.pytestArgs": [
+        "server"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    
 }

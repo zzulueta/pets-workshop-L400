@@ -1,0 +1,10 @@
+ .github/agents/test.agent.md            |   36 ++
+ .github/copilot-instructions.md         |   25 +
+ .vscode/settings.json                   |    8 +-
+ client/src/components/DogDetails.svelte |   36 +-
+ dog-age-plan.md                         |   92 +++
+ server/app.py                           |   60 +-
+ server/models/dog.py                    |   81 ++-
+ server/test_app.py                      | 1056 +++++++++++++++++++++++++++++++
+ server/utils/seed_database.py           |   87 ++-
+ 9 files changed, 1451 insertions(+), 30 deletions(-)
