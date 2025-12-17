@@ -1,0 +1,1727 @@
+diff --git a/.github/agents/test.agent.md b/.github/agents/test.agent.md
+new file mode 100644
+index 0000000..8953bf3
+--- /dev/null
++++ b/.github/agents/test.agent.md
+@@ -0,0 +1,36 @@
++---
++description: "Automated Test Generation Agent for GitHub Copilot – analyzes code and updates test_app.py with complete pytest test suites including edge cases, boundaries, constraints, and negative scenarios."
++tools: ['edit', 'search', 'problems', 'runCommands']
++model: Claude Sonnet 4.5
++---
++
++# Comprehensive Test Generation Agent
++
++## Role
++You are an expert Python test engineer specializing in pytest. Your job is to analyze project code and **modify `test_app.py`** to include complete, robust, and production-ready test suites. Every output must be a patch-style modification of `test_app.py` containing real test cases.
++
++## Responsibilities
++- Inspect the target codebase to infer intended behavior, constraints, and failure modes.
++- Create or update `test_app.py` with comprehensive pytest test suites.
++- Add **edge cases**, **boundary tests**, **invalid/negative cases**, and **constraint violation tests**.
++- Include tests for exceptions, type errors, missing arguments, and unusual runtime states.
++- Add mocks for external services, network calls, and DB operations when appropriate.
++- Suggest optional property-based Hypothesis tests when beneficial.
++- **After writing or modifying tests, always run `pytest` to execute them.**
++
++## Test Design Areas
++1. **Functional Tests** – Normal usage.
++2. **Edge & Boundary Tests** – Off-by-one, empty payloads, min/max values.
++3. **Constraint & Negative Tests** – Type violations, invalid inputs.
++4. **Exception & Error Handling Tests** – Ensure proper failure behavior.
++5. **State & Integration Tests** – Dependencies, mocked DB/HTTP calls.
++6. **Property-Based Tests (Optional)** – Hypothesis-based broad input tests.
++7. **Regression Tests** – Cover previous bugs.
++
++---
++
++## Output Format (Modified)
++
++The agent must **ONLY output a modification patch to `test_app.py`** in the following structure:
++
++### **Output Format**
+diff --git a/.github/copilot-instructions.md b/.github/copilot-instructions.md
+new file mode 100644
+index 0000000..7cfd53a
+--- /dev/null
++++ b/.github/copilot-instructions.md
+@@ -0,0 +1,25 @@
++# Dog Shelter Application
++
++## Organizational Standards
++
++### Code Quality
++- All functions must have docstrings following Google style
++- Maximum function length: 50 lines
++- Use descriptive variable names (no single letters except loop counters)
++
++### Python Backend
++- Use type hints for all function parameters and return values
++- Follow PEP 8 strictly
++- All database queries must use SQLAlchemy ORM (no raw SQL)
++- All routes require corresponding unit tests in `test_*.py`
++
++### Frontend
++- Use Svelte components with TypeScript
++- All API calls must include error handling
++- Use arrow functions consistently
++- Accessibility: All interactive elements need aria-labels
++
++### Testing
++- Test coverage must exceed 80%
++- Mock all external dependencies
++- Tests should follow AAA pattern (Arrange, Act, Assert)
+\ No newline at end of file
+diff --git a/.vscode/settings.json b/.vscode/settings.json
+index 7f949c7..9c5fcdb 100644
+--- a/.vscode/settings.json
++++ b/.vscode/settings.json
+@@ -9,5 +9,11 @@
+         "devcontainers",
+         "prebuild"
+     ],
+-    "github.copilot.nextEditSuggestions.enabled": true,    
++    "github.copilot.nextEditSuggestions.enabled": true,
++    "python.testing.pytestArgs": [
++        "server"
++    ],
++    "python.testing.unittestEnabled": false,
++    "python.testing.pytestEnabled": true,
++    
+ }
+\ No newline at end of file
+diff --git a/client/src/components/DogDetails.svelte b/client/src/components/DogDetails.svelte
+index d695277..9ae8714 100644
+--- a/client/src/components/DogDetails.svelte
++++ b/client/src/components/DogDetails.svelte
+@@ -9,6 +9,7 @@
+         description: string;
+         gender: string;
+         status: 'AVAILABLE' | 'PENDING' | 'ADOPTED';
++        human_age?: number;
+     };
+ 
+     // Accept either a dog object or a dogId
+@@ -18,12 +19,33 @@
+     let loading = true;
+     let error: string | null = null;
+     let dogData: Dog | null = null;
++    let humanAgeData: { dog_name: string; dog_age: number; human_age: number } | null = null;
++    let humanAgeError: string | null = null;
++    
++    const fetchHumanAge = async (id: number): Promise<void> => {
++        try {
++            const response = await fetch(`/api/dogs/${id}/human-age`);
++            if (response.ok) {
++                humanAgeData = await response.json();
++                if (dogData && humanAgeData) {
++                    dogData.human_age = humanAgeData.human_age;
++                }
++            } else {
++                humanAgeError = `Failed to fetch human age: ${response.status}`;
++            }
++        } catch (err) {
++            humanAgeError = `Error: ${err instanceof Error ? err.message : String(err)}`;
++        }
++    };
+     
+     onMount(async () => {
+         // If dog object is provided directly, use it
+         if (dog) {
+             dogData = dog;
+             loading = false;
++            if (dogData.id) {
++                await fetchHumanAge(dogData.id);
++            }
+             return;
+         }
+         
+@@ -33,6 +55,7 @@
+                 const response = await fetch(`/api/dogs/${dogId}`);
+                 if (response.ok) {
+                     dogData = await response.json();
++                    await fetchHumanAge(dogId);
+                 } else {
+                     error = `Failed to fetch dog: ${response.status} ${response.statusText}`;
+                 }
+@@ -75,14 +98,21 @@
+             
+             <div class="grid grid-cols-2 gap-4 mb-6 mt-4">
+                 <div class="flex items-center">
+-                    <p class="text-slate-300">Breed: {dogData.breed}</p>
++                    <p class="text-slate-300" aria-label="Dog breed">Breed: {dogData.breed}</p>
+                 </div>
+                 <div class="flex items-center">
+-                    <p class="text-slate-300">Age: {dogData.age} {dogData.age === 1 ? 'year' : 'years'}</p>
++                    <p class="text-slate-300" aria-label="Dog age in years">Age: {dogData.age} {dogData.age === 1 ? 'year' : 'years'}</p>
+                 </div>
+                 <div class="flex items-center">
+-                    <p class="text-slate-300">Gender: {dogData.gender}</p>
++                    <p class="text-slate-300" aria-label="Dog gender">Gender: {dogData.gender}</p>
+                 </div>
++                {#if dogData.human_age !== undefined && !humanAgeError}
++                <div class="flex items-center col-span-2">
++                    <div class="bg-blue-500/20 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-lg w-full transition-all duration-300 ease-in-out" aria-label="Dog age in human years">
++                        <span class="font-semibold">🐕 Human Age:</span> {dogData.human_age} {dogData.human_age === 1 ? 'year' : 'years'}
++                    </div>
++                </div>
++                {/if}
+             </div>
+             
+             <h2 class="text-lg font-semibold text-slate-200 mb-2">About {dogData.name}</h2>
+diff --git a/dog-age-plan.md b/dog-age-plan.md
+new file mode 100644
+index 0000000..afe3012
+--- /dev/null
++++ b/dog-age-plan.md
+@@ -0,0 +1,92 @@
++## Implementation Plan: Dog Human Age Endpoint
++
++### Phase 1: Backend Implementation
++
++#### 1.1 Create the API Endpoint
++**File**: `server/app.py`
++
++- Add new route `GET /api/dogs/<int:id>/human-age`
++- Query dog by ID from database
++- Calculate human age using the formula:
++  - First 2 years: 10.5 human years each
++  - Years after 2: 4 human years each
++- Return JSON with dog_name, dog_age, and human_age
++- Handle 404 for non-existent dogs
++- Follow type hints requirement from `copilot-instructions.md`
++
++#### 1.2 Add Unit Tests
++**File**: `server/test_app.py`
++
++Create tests following AAA pattern:
++- `test_get_dog_human_age_young_dog` - Test human age calculation for dog 1 year old (boundary)
++- `test_get_dog_human_age_exactly_two_years` - Test dog exactly 2 years (boundary)
++- `test_get_dog_human_age_three_years` - Test dog just over boundary (3 years)
++- `test_get_dog_human_age_older_dog` - Test dog older than 2 years (5 years)
++- `test_get_dog_human_age_zero_years` - Test newborn dog (edge case: 0 years)
++- `test_get_dog_human_age_very_old_dog` - Test very old dog (edge case: 20 years)
++- `test_get_dog_human_age_not_found` - Test 404 error when dog is not found
++- `test_get_dog_human_age_zero_id` - Test behavior with zero dog ID (edge case)
++- `test_get_dog_human_age_large_id` - Test with very large dog ID (boundary test)
++- `test_get_dog_human_age_response_structure` - Test response has correct keys and types
++- Mock all database calls as per instructions
++
++### Phase 2: Frontend Implementation
++
++#### 2.1 Update Dog Details Component
++**File**: `client/src/components/DogDetails.svelte`
++
++- Add `human_age` field to Dog interface
++- Create async function to fetch human age data
++- Display human age in the dog details card
++- Add error handling for API calls
++- Use arrow functions (per `copilot-instructions.md`)
++- Add aria-labels for accessibility
++
++#### 2.2 UI Design
++- Add human age display in the existing grid layout
++- Use slate color theme to match existing design
++- Add transition effects for consistency
++- Include icon or badge to highlight the human age feature
++
++### Phase 3: Testing
++
++#### 3.1 Backend Tests
++**File**: `server/test_app.py`
++- Run with `python -m unittest`
++- Ensure >80% coverage requirement
++- Mock all database dependencies
++
++#### 3.2 End-to-End Tests
++**File**: `client/e2e-tests/dog-details.spec.ts`
++- Add test for human age display
++- Test error handling when endpoint fails
++- Verify correct calculation display
++- Run with `npm run test:e2e`
++
++### Phase 4: Validation
++
++- Test the endpoint manually at `http://localhost:5100/api/dogs/<id>/human-age`
++- Verify frontend display at `http://localhost:4321/dog/<id>`
++- Run all tests: `python -m unittest` and `npm run test:e2e`
++- Check test coverage meets 80% threshold
++
++### Implementation Order
++
++1. Backend endpoint + unit tests (ensure tests pass first)
++2. Frontend component updates
++3. Frontend e2e tests
++4. Manual validation
++5. Final testing and coverage check
++
++### Key Requirements from Instructions
++
++From `copilot-instructions.md`:
++- ✅ Type hints for all function parameters and return values
++- ✅ Mock all database calls in tests
++- ✅ Use arrow functions in TypeScript
++- ✅ Add aria-labels for accessibility
++- ✅ 80%+ test coverage
++- ✅ AAA pattern (Arrange, Act, Assert)
++- ✅ Google-style docstrings
++
++This plan ensures all organizational standards are met while implementing a complete, tested feature across the full stack.
+diff --git a/server/app.py b/server/app.py
+index b6331cc..a839df6 100644
+--- a/server/app.py
++++ b/server/app.py
+@@ -37,6 +37,20 @@ def get_dogs() -> Response:
+ 
+ @app.route('/api/dogs/<int:id>', methods=['GET'])
+ def get_dog(id: int) -> tuple[Response, int] | Response:
++    """
++    Retrieve a specific dog by ID from the database.
++    This function queries the database for a dog with the given ID, joining with the
++    Breed table to include the breed name. If found, returns the dog's details as JSON.
++    Args:
++        id (int): The unique identifier of the dog to retrieve.
++    Returns:
++        tuple[Response, int] | Response: A tuple containing a JSON response with error 
++            message and 404 status code if the dog is not found, or a JSON response 
++            containing the dog's details (id, name, breed, age, description, gender, 
++            and status) if found.
++    Raises:
++        None: Errors are handled by returning appropriate HTTP responses.
++    """
+     # Query the specific dog by ID and join with breed to get breed name
+     dog_query = db.session.query(
+         Dog.id,
+@@ -65,7 +79,49 @@ def get_dog(id: int) -> tuple[Response, int] | Response:
+     
+     return jsonify(dog)
+ 
+-## HERE
++
++@app.route('/api/dogs/<int:id>/human-age', methods=['GET'])
++def get_dog_human_age(id: int) -> tuple[Response, int] | Response:
++    """
++    Calculate and return a dog's age in human years.
++    
++    Uses the formula:
++    - First 2 years: 10.5 human years each
++    - Years after 2: 4 human years each
++    
++    Args:
++        id: The unique identifier of the dog
++        
++    Returns:
++        JSON response with dog_name, dog_age, and human_age, or 404 error
++    """
++    # Query the specific dog by ID
++    dog_query = db.session.query(
++        Dog.id,
++        Dog.name,
++        Dog.age
++    ).filter(Dog.id == id).first()
++    
++    # Return 404 if dog not found
++    if not dog_query:
++        return jsonify({"error": "Dog not found"}), 404
++    
++    # Calculate human age using the formula
++    dog_age: int = dog_query.age
++    if dog_age <= 2:
++        human_age: float = dog_age * 10.5
++    else:
++        human_age: float = (2 * 10.5) + ((dog_age - 2) * 4)
++    
++    # Prepare response
++    response: Dict[str, Any] = {
++        'dog_name': dog_query.name,
++        'dog_age': dog_age,
++        'human_age': human_age
++    }
++    
++    return jsonify(response)
++
+ 
+ if __name__ == '__main__':
+-    app.run(debug=True, port=5100) # Port 5100 to avoid macOS conflicts
+\ No newline at end of file
++    app.run(debug=True, port=5100)  # Port 5100 to avoid macOS conflicts
+diff --git a/server/models/dog.py b/server/models/dog.py
+index 0477fe7..4f2d01d 100644
+--- a/server/models/dog.py
++++ b/server/models/dog.py
+@@ -11,6 +11,19 @@ class AdoptionStatus(Enum):
+     PENDING = 'Pending'
+ 
+ class Dog(BaseModel):
++    """Model representing a dog in the shelter.
++    
++    Attributes:
++        id: Unique identifier for the dog.
++        name: Name of the dog.
++        breed_id: Foreign key to the breed table.
++        age: Age of the dog in years.
++        gender: Gender of the dog (Male, Female, or Unknown).
++        description: Detailed description of the dog.
++        status: Current adoption status of the dog.
++        intake_date: Date when the dog was brought to the shelter.
++        adoption_date: Date when the dog was adopted (None if not adopted).
++    """
+     __tablename__ = 'dogs'
+     
+     id = db.Column(db.Integer, primary_key=True)
+@@ -21,30 +34,82 @@ class Dog(BaseModel):
+     description = db.Column(db.Text)
+     
+     # Adoption status
+-    status = db.Column(db.Enum(AdoptionStatus), default=AdoptionStatus.AVAILABLE)
++    status = db.Column(
++        db.Enum(AdoptionStatus), default=AdoptionStatus.AVAILABLE
++    )
+     intake_date = db.Column(db.DateTime, default=datetime.now)
+     adoption_date = db.Column(db.DateTime, nullable=True)
+     
+     @validates('name')
+-    def validate_name(self, key, name):
++    def validate_name(self, key: str, name: str) -> str:
++        """Validates the dog's name.
++        
++        Args:
++            key: The attribute key being validated.
++            name: The name to validate.
++            
++        Returns:
++            The validated name.
++            
++        Raises:
++            ValueError: If the name is less than 2 characters.
++        """
+         return self.validate_string_length('Dog name', name, min_length=2)
+     
+     @validates('gender')
+-    def validate_gender(self, key, gender):
++    def validate_gender(self, key: str, gender: str) -> str:
++        """Validates the dog's gender.
++        
++        Args:
++            key: The attribute key being validated.
++            gender: The gender to validate.
++            
++        Returns:
++            The validated gender.
++            
++        Raises:
++            ValueError: If the gender is not 'Male', 'Female', or 'Unknown'.
++        """
+         if gender not in ['Male', 'Female', 'Unknown']:
+             raise ValueError("Gender must be 'Male', 'Female', or 'Unknown'")
+         return gender
+     
+     @validates('description')
+-    def validate_description(self, key, description):
++    def validate_description(self, key: str, description: str) -> str:
++        """Validates the dog's description.
++        
++        Args:
++            key: The attribute key being validated.
++            description: The description to validate.
++            
++        Returns:
++            The validated description.
++            
++        Raises:
++            ValueError: If the description is not None and less than
++                10 characters.
++        """
+         if description is not None:
+-            return self.validate_string_length('Description', description, min_length=10, allow_none=True)
++            return self.validate_string_length(
++                'Description', description, min_length=10, allow_none=True
++            )
+         return description
+     
+-    def __repr__(self):
++    def __repr__(self) -> str:
++        """Returns a string representation of the dog.
++        
++        Returns:
++            A string containing the dog's name, ID, and adoption status.
++        """
+         return f'<Dog {self.name}, ID: {self.id}, Status: {self.status.value}>'
+ 
+-    def to_dict(self):
++    def to_dict(self) -> dict:
++        """Converts the dog instance to a dictionary.
++        
++        Returns:
++            A dictionary containing the dog's attributes including id, name,
++            breed, age, gender, description, and adoption status.
++        """
+         return {
+             'id': self.id,
+             'name': self.name,
+@@ -53,4 +118,4 @@ class Dog(BaseModel):
+             'gender': self.gender,
+             'description': self.description,
+             'status': self.status.name if self.status else 'UNKNOWN'
+-        }
+\ No newline at end of file
++        }
+diff --git a/server/test_app.py b/server/test_app.py
+index adbdf5f..721ce18 100644
+--- a/server/test_app.py
++++ b/server/test_app.py
+@@ -91,6 +91,1062 @@ class TestApp(unittest.TestCase):
+         self.assertEqual(len(data), 1)
+         self.assertEqual(set(data[0].keys()), {'id', 'name', 'breed'})
+ 
++    @patch('app.db.session.query')
++    def test_get_dogs_single_dog(self, mock_query):
++        """Test retrieval with exactly one dog (boundary case)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Solo", "Poodle")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 1)
++        self.assertEqual(data[0]['id'], 1)
++        self.assertEqual(data[0]['name'], "Solo")
++        self.assertEqual(data[0]['breed'], "Poodle")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_large_dataset(self, mock_query):
++        """Test retrieval with many dogs (edge case: large dataset)"""
++        # Arrange
++        mock_dogs = [
++            self._create_mock_dog(i, f"Dog{i}", f"Breed{i}")
++            for i in range(1, 101)
++        ]
++        self._setup_query_mock(mock_query, mock_dogs)
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 100)
++        self.assertEqual(data[0]['id'], 1)
++        self.assertEqual(data[99]['id'], 100)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_special_characters_in_name(self, mock_query):
++        """Test dogs with special characters in names (validation)"""
++        # Arrange
++        dog1 = self._create_mock_dog(1, "Max's Dog", "Labrador")
++        dog2 = self._create_mock_dog(2, "Fifi-Lou", "Poodle")
++        dog3 = self._create_mock_dog(3, "Dog #1", "Beagle")
++        self._setup_query_mock(mock_query, [dog1, dog2, dog3])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 3)
++        self.assertEqual(data[0]['name'], "Max's Dog")
++        self.assertEqual(data[1]['name'], "Fifi-Lou")
++        self.assertEqual(data[2]['name'], "Dog #1")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_unicode_names(self, mock_query):
++        """Test dogs with unicode characters in names (edge case)"""
++        # Arrange
++        dog1 = self._create_mock_dog(1, "Fröhlich", "German Shepherd")
++        dog2 = self._create_mock_dog(2, "Señor", "Chihuahua")
++        dog3 = self._create_mock_dog(3, "小狗", "Shiba Inu")
++        self._setup_query_mock(mock_query, [dog1, dog2, dog3])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 3)
++        self.assertEqual(data[0]['name'], "Fröhlich")
++        self.assertEqual(data[1]['name'], "Señor")
++        self.assertEqual(data[2]['name'], "小狗")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_long_names(self, mock_query):
++        """Test dogs with very long names (boundary test)"""
++        # Arrange
++        long_name = "A" * 100
++        long_breed = "B" * 100
++        dog = self._create_mock_dog(1, long_name, long_breed)
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 1)
++        self.assertEqual(data[0]['name'], long_name)
++        self.assertEqual(data[0]['breed'], long_breed)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_empty_string_names(self, mock_query):
++        """Test dogs with empty string names (edge case)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "", "")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 1)
++        self.assertEqual(data[0]['name'], "")
++        self.assertEqual(data[0]['breed'], "")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_mixed_case_names(self, mock_query):
++        """Test dogs with mixed case names (constraint validation)"""
++        # Arrange
++        dog1 = self._create_mock_dog(1, "ALLCAPS", "GERMAN SHEPHERD")
++        dog2 = self._create_mock_dog(2, "lowercase", "poodle")
++        dog3 = self._create_mock_dog(3, "MixedCase", "Golden Retriever")
++        self._setup_query_mock(mock_query, [dog1, dog2, dog3])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 3)
++        self.assertEqual(data[0]['name'], "ALLCAPS")
++        self.assertEqual(data[1]['name'], "lowercase")
++        self.assertEqual(data[2]['name'], "MixedCase")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_whitespace_names(self, mock_query):
++        """Test dogs with whitespace in names (edge case)"""
++        # Arrange
++        dog1 = self._create_mock_dog(1, "  Leading", "Breed1")
++        dog2 = self._create_mock_dog(2, "Trailing  ", "Breed2")
++        dog3 = self._create_mock_dog(3, "Mid  dle", "Breed3")
++        self._setup_query_mock(mock_query, [dog1, dog2, dog3])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 3)
++        self.assertEqual(data[0]['name'], "  Leading")
++        self.assertEqual(data[1]['name'], "Trailing  ")
++        self.assertEqual(data[2]['name'], "Mid  dle")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_numeric_ids(self, mock_query):
++        """Test dogs with various numeric IDs (boundary test)"""
++        # Arrange
++        dog1 = self._create_mock_dog(0, "Zero", "Breed1")
++        dog2 = self._create_mock_dog(1, "One", "Breed2")
++        dog3 = self._create_mock_dog(999999, "Max", "Breed3")
++        self._setup_query_mock(mock_query, [dog1, dog2, dog3])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 3)
++        self.assertEqual(data[0]['id'], 0)
++        self.assertEqual(data[1]['id'], 1)
++        self.assertEqual(data[2]['id'], 999999)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_negative_ids(self, mock_query):
++        """Test dogs with negative IDs (edge case: unusual data)"""
++        # Arrange
++        dog = self._create_mock_dog(-1, "Negative", "Breed")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 1)
++        self.assertEqual(data[0]['id'], -1)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_content_type(self, mock_query):
++        """Test that response has correct JSON content type (constraint)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Buddy", "Labrador")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        self.assertEqual(response.content_type, 'application/json')
++
++    @patch('app.db.session.query')
++    def test_get_dogs_json_parseable(self, mock_query):
++        """Test that response is valid JSON (constraint validation)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Buddy", "Labrador")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        try:
++            data = json.loads(response.data)
++            self.assertIsInstance(data, list)
++        except json.JSONDecodeError:
++            self.fail("Response is not valid JSON")
++
++    @patch('app.db.session.query')
++    def test_get_dogs_field_types(self, mock_query):
++        """Test that all fields have correct types (constraint validation)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Buddy", "Labrador")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 1)
++        self.assertIsInstance(data[0]['id'], int)
++        self.assertIsInstance(data[0]['name'], str)
++        self.assertIsInstance(data[0]['breed'], str)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_duplicate_ids(self, mock_query):
++        """Test handling of duplicate IDs (edge case: data integrity)"""
++        # Arrange
++        dog1 = self._create_mock_dog(1, "First", "Breed1")
++        dog2 = self._create_mock_dog(1, "Second", "Breed2")
++        self._setup_query_mock(mock_query, [dog1, dog2])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(len(data), 2)
++        self.assertEqual(data[0]['id'], 1)
++        self.assertEqual(data[1]['id'], 1)
++
++    @patch('app.db.session.query')
++    def test_get_dogs_query_called_correctly(self, mock_query):
++        """Test that database query is constructed correctly (test)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Buddy", "Labrador")
++        mock_query_instance = self._setup_query_mock(mock_query, [dog])
++        
++        # Act
++        response = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        mock_query.assert_called_once()
++        mock_query_instance.join.assert_called_once()
++        mock_query_instance.all.assert_called_once()
++
++    @patch('app.db.session.query')
++    def test_get_dogs_http_method(self, mock_query):
++        """Test that only GET method is accepted (constraint validation)"""
++        # Arrange
++        dog = self._create_mock_dog(1, "Buddy", "Labrador")
++        self._setup_query_mock(mock_query, [dog])
++        
++        # Act - Test GET (should work)
++        response_get = self.app.get('/api/dogs')
++        
++        # Assert
++        self.assertEqual(response_get.status_code, 200)
++        
++        # Act - Test POST (should fail)
++        response_post = self.app.post('/api/dogs')
++        self.assertEqual(response_post.status_code, 405)
++        
++        # Act - Test PUT (should fail)
++        response_put = self.app.put('/api/dogs')
++        self.assertEqual(response_put.status_code, 405)
++        
++        # Act - Test DELETE (should fail)
++        response_delete = self.app.delete('/api/dogs')
++        self.assertEqual(response_delete.status_code, 405)
++
++    # Tests for /api/dogs/<int:id> endpoint (get_dog function)
++    
++    @patch('app.db.session.query')
++    def test_get_dog_success(self, mock_query):
++        """Test successful retrieval of a specific dog by ID"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 1
++        mock_dog.name = "Buddy"
++        mock_dog.breed = "Labrador"
++        mock_dog.age = 3
++        mock_dog.description = "A friendly dog"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/1')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['id'], 1)
++        self.assertEqual(data['name'], "Buddy")
++        self.assertEqual(data['breed'], "Labrador")
++        self.assertEqual(data['age'], 3)
++        self.assertEqual(data['description'], "A friendly dog")
++        self.assertEqual(data['gender'], "Male")
++        self.assertEqual(data['status'], "AVAILABLE")
++
++    @patch('app.db.session.query')
++    def test_get_dog_not_found(self, mock_query):
++        """Test retrieval of non-existent dog returns 404"""
++        # Arrange
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = None
++        
++        # Act
++        response = self.app.get('/api/dogs/999')
++        
++        # Assert
++        self.assertEqual(response.status_code, 404)
++        data = json.loads(response.data)
++        self.assertIn('error', data)
++        self.assertEqual(data['error'], "Dog not found")
++
++    @patch('app.db.session.query')
++    def test_get_dog_response_structure(self, mock_query):
++        """Test that response contains all required fields"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 5
++        mock_dog.name = "Rex"
++        mock_dog.breed = "Beagle"
++        mock_dog.age = 2
++        mock_dog.description = "Loves to play"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.PENDING
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/5')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        required_fields = {
++            'id', 'name', 'breed', 'age', 'description', 'gender', 'status'
++        }
++        self.assertEqual(set(data.keys()), required_fields)
++
++    @patch('app.db.session.query')
++    def test_get_dog_adopted_status(self, mock_query):
++        """Test retrieval of dog with ADOPTED status"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 10
++        mock_dog.name = "Charlie"
++        mock_dog.breed = "Poodle"
++        mock_dog.age = 5
++        mock_dog.description = "Happy adopted dog"
++        mock_dog.gender = "Female"
++        mock_dog.status = AdoptionStatus.ADOPTED
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/10')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['status'], "ADOPTED")
++
++    @patch('app.db.session.query')
++    def test_get_dog_zero_id(self, mock_query):
++        """Test retrieval with ID 0 (boundary case)"""
++        # Arrange
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = None
++        
++        # Act
++        response = self.app.get('/api/dogs/0')
++        
++        # Assert
++        self.assertEqual(response.status_code, 404)
++        data = json.loads(response.data)
++        self.assertEqual(data['error'], "Dog not found")
++
++    @patch('app.db.session.query')
++    def test_get_dog_negative_id(self, mock_query):
++        """Test retrieval with negative ID (edge case)"""
++        # Arrange - Flask won't match negative IDs to <int:id> route
++        # Act
++        response = self.app.get('/api/dogs/-1')
++        
++        # Assert - Should return 404 (route not found)
++        self.assertEqual(response.status_code, 404)
++
++    @patch('app.db.session.query')
++    def test_get_dog_very_large_id(self, mock_query):
++        """Test retrieval with very large ID (boundary case)"""
++        # Arrange
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = None
++        
++        # Act
++        response = self.app.get('/api/dogs/999999999')
++        
++        # Assert
++        self.assertEqual(response.status_code, 404)
++        data = json.loads(response.data)
++        self.assertEqual(data['error'], "Dog not found")
++
++    @patch('app.db.session.query')
++    def test_get_dog_special_characters_in_fields(self, mock_query):
++        """Test dog with special characters in name and description"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 15
++        mock_dog.name = "Max's Best Friend"
++        mock_dog.breed = "Mixed-Breed"
++        mock_dog.age = 4
++        mock_dog.description = (
++            "A dog with 'special' & unique <characteristics>!"
++        )
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/15')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['name'], "Max's Best Friend")
++        self.assertEqual(
++            data['description'],
++            "A dog with 'special' & unique <characteristics>!"
++        )
++
++    @patch('app.db.session.query')
++    def test_get_dog_unicode_characters(self, mock_query):
++        """Test dog with unicode characters in fields"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 20
++        mock_dog.name = "Fröhlich"
++        mock_dog.breed = "German Shëpherd"
++        mock_dog.age = 6
++        mock_dog.description = "Ein schöner Hund 🐕"
++        mock_dog.gender = "Female"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/20')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['name'], "Fröhlich")
++        self.assertEqual(data['breed'], "German Shëpherd")
++        self.assertEqual(data['description'], "Ein schöner Hund 🐕")
++
++    @patch('app.db.session.query')
++    def test_get_dog_age_zero(self, mock_query):
++        """Test dog with age 0 (boundary case - puppy)"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 25
++        mock_dog.name = "Tiny Puppy"
++        mock_dog.breed = "Chihuahua"
++        mock_dog.age = 0
++        mock_dog.description = "Very young puppy"
++        mock_dog.gender = "Unknown"
++        mock_dog.status = AdoptionStatus.PENDING
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/25')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['age'], 0)
++        self.assertEqual(data['gender'], "Unknown")
++
++    @patch('app.db.session.query')
++    def test_get_dog_very_old_age(self, mock_query):
++        """Test dog with very old age (boundary case)"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 30
++        mock_dog.name = "Old Timer"
++        mock_dog.breed = "Golden Retriever"
++        mock_dog.age = 20
++        mock_dog.description = "Senior dog needing care"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/30')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['age'], 20)
++
++    @patch('app.db.session.query')
++    def test_get_dog_content_type(self, mock_query):
++        """Test that response has correct content type"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 35
++        mock_dog.name = "Test Dog"
++        mock_dog.breed = "Test Breed"
++        mock_dog.age = 5
++        mock_dog.description = "Test description"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/35')
++        
++        # Assert
++        self.assertEqual(response.content_type, 'application/json')
++
++    @patch('app.db.session.query')
++    def test_get_dog_http_method_constraints(self, mock_query):
++        """Test that only GET method is accepted for single dog endpoint"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 40
++        mock_dog.name = "Method Test"
++        mock_dog.breed = "Test Breed"
++        mock_dog.age = 3
++        mock_dog.description = "Testing HTTP methods"
++        mock_dog.gender = "Female"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act & Assert - GET should work
++        response_get = self.app.get('/api/dogs/40')
++        self.assertEqual(response_get.status_code, 200)
++        
++        # Act & Assert - POST should fail
++        response_post = self.app.post('/api/dogs/40')
++        self.assertEqual(response_post.status_code, 405)
++        
++        # Act & Assert - PUT should fail
++        response_put = self.app.put('/api/dogs/40')
++        self.assertEqual(response_put.status_code, 405)
++        
++        # Act & Assert - DELETE should fail
++        response_delete = self.app.delete('/api/dogs/40')
++        self.assertEqual(response_delete.status_code, 405)
++
++    @patch('app.db.session.query')
++    def test_get_dog_invalid_id_type(self, mock_query):
++        """Test with invalid ID type (string instead of int)"""
++        # Act - Flask won't match non-integer to <int:id>
++        response = self.app.get('/api/dogs/invalid')
++        
++        # Assert - Should return 404 (route not found)
++        self.assertEqual(response.status_code, 404)
++
++    @patch('app.db.session.query')
++    def test_get_dog_field_types(self, mock_query):
++        """Test that response fields have correct data types"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 45
++        mock_dog.name = "Type Test"
++        mock_dog.breed = "Test Breed"
++        mock_dog.age = 7
++        mock_dog.description = "Testing data types"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/45')
++        
++        # Assert
++        data = json.loads(response.data)
++        self.assertIsInstance(data['id'], int)
++        self.assertIsInstance(data['name'], str)
++        self.assertIsInstance(data['breed'], str)
++        self.assertIsInstance(data['age'], int)
++        self.assertIsInstance(data['description'], str)
++        self.assertIsInstance(data['gender'], str)
++        self.assertIsInstance(data['status'], str)
++
++    @patch('app.db.session.query')
++    def test_get_dog_female_gender(self, mock_query):
++        """Test dog with Female gender"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 50
++        mock_dog.name = "Lady"
++        mock_dog.breed = "Collie"
++        mock_dog.age = 4
++        mock_dog.description = "Beautiful female dog"
++        mock_dog.gender = "Female"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/50')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['gender'], "Female")
++
++    @patch('app.db.session.query')
++    def test_get_dog_long_description(self, mock_query):
++        """Test dog with very long description (boundary case)"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        long_description = "A" * 1000
++        mock_dog = MagicMock()
++        mock_dog.id = 55
++        mock_dog.name = "Verbose"
++        mock_dog.breed = "Husky"
++        mock_dog.age = 3
++        mock_dog.description = long_description
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.PENDING
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/55')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['description'], long_description)
++        self.assertEqual(len(data['description']), 1000)
++
++    @patch('app.db.session.query')
++    def test_get_dog_query_execution(self, mock_query):
++        """Test that database query is executed correctly"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 60
++        mock_dog.name = "Query Test"
++        mock_dog.breed = "Bulldog"
++        mock_dog.age = 5
++        mock_dog.description = "Testing query execution"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/60')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        mock_query.assert_called_once()
++        mock_query_instance.join.assert_called_once()
++        mock_query_instance.filter.assert_called_once()
++        mock_query_instance.first.assert_called_once()
++
++    @patch('app.db.session.query')
++    def test_get_dog_pending_status(self, mock_query):
++        """Test dog with PENDING adoption status"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 65
++        mock_dog.name = "Pending Pup"
++        mock_dog.breed = "Dachshund"
++        mock_dog.age = 2
++        mock_dog.description = "Adoption pending"
++        mock_dog.gender = "Female"
++        mock_dog.status = AdoptionStatus.PENDING
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/65')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['status'], "PENDING")
++
++    @patch('app.db.session.query')
++    def test_get_dog_json_serialization(self, mock_query):
++        """Test that response is properly JSON serialized"""
++        # Arrange
++        from models.dog import AdoptionStatus
++        mock_dog = MagicMock()
++        mock_dog.id = 70
++        mock_dog.name = "JSON Dog"
++        mock_dog.breed = "Pug"
++        mock_dog.age = 4
++        mock_dog.description = "Testing JSON"
++        mock_dog.gender = "Male"
++        mock_dog.status = AdoptionStatus.AVAILABLE
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.join.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/70')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        # Should be able to parse JSON without error
++        data = json.loads(response.data)
++        self.assertIsInstance(data, dict)
++
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_young_dog(self, mock_query):
++        """Test human age calculation for dog 1 year old (boundary)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 1
++        mock_dog.name = "Puppy"
++        mock_dog.age = 1
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/1/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Puppy")
++        self.assertEqual(data['dog_age'], 1)
++        self.assertEqual(data['human_age'], 10.5)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_older_dog(self, mock_query):
++        """Test human age calculation for dog older than 2 years"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 2
++        mock_dog.name = "Senior"
++        mock_dog.age = 5
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/2/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Senior")
++        self.assertEqual(data['dog_age'], 5)
++        self.assertEqual(data['human_age'], 33.0)  # (2 * 10.5) + ((5 - 2) * 4)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_exactly_two_years(self, mock_query):
++        """Test human age calculation for dog exactly 2 years (boundary)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 3
++        mock_dog.name = "Toddler"
++        mock_dog.age = 2
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/3/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Toddler")
++        self.assertEqual(data['dog_age'], 2)
++        self.assertEqual(data['human_age'], 21.0)  # 2 * 10.5
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_three_years(self, mock_query):
++        """Test human age calculation for dog just over boundary (3 years)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 4
++        mock_dog.name = "Young Adult"
++        mock_dog.age = 3
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/4/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Young Adult")
++        self.assertEqual(data['dog_age'], 3)
++        self.assertEqual(data['human_age'], 25.0)  # (2 * 10.5) + ((3 - 2) * 4)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_zero_years(self, mock_query):
++        """Test human age calculation for newborn dog (edge case: 0 years)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 5
++        mock_dog.name = "Newborn"
++        mock_dog.age = 0
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/5/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Newborn")
++        self.assertEqual(data['dog_age'], 0)
++        self.assertEqual(data['human_age'], 0.0)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_very_old_dog(self, mock_query):
++        """Test human age calculation for very old dog (edge case: 20 years)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 6
++        mock_dog.name = "Ancient"
++        mock_dog.age = 20
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/6/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Ancient")
++        self.assertEqual(data['dog_age'], 20)
++        self.assertEqual(data['human_age'], 93.0)  # (2 * 10.5) + ((20 - 2) * 4)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_not_found(self, mock_query):
++        """Test 404 error when dog is not found (constraint validation)"""
++        # Arrange
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = None
++        
++        # Act
++        response = self.app.get('/api/dogs/999/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 404)
++        data = json.loads(response.data)
++        self.assertEqual(data['error'], "Dog not found")
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_zero_id(self, mock_query):
++        """Test behavior with zero dog ID (edge case: minimum valid ID)"""
++        # Arrange
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = None
++        
++        # Act
++        response = self.app.get('/api/dogs/0/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 404)
++        data = json.loads(response.data)
++        self.assertEqual(data['error'], "Dog not found")
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_response_structure(self, mock_query):
++        """Test response structure has correct keys and types (constraint)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 1
++        mock_dog.name = "Buddy"
++        mock_dog.age = 3
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/1/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(set(data.keys()), {'dog_name', 'dog_age', 'human_age'})
++        self.assertIsInstance(data['dog_name'], str)
++        self.assertIsInstance(data['dog_age'], int)
++        self.assertIsInstance(data['human_age'], float)
++        
++    @patch('app.db.session.query')
++    def test_get_dog_human_age_large_id(self, mock_query):
++        """Test with very large dog ID (edge case: boundary test)"""
++        # Arrange
++        mock_dog = MagicMock()
++        mock_dog.id = 999999
++        mock_dog.name = "Max ID"
++        mock_dog.age = 5
++        
++        mock_query_instance = MagicMock()
++        mock_query.return_value = mock_query_instance
++        mock_query_instance.filter.return_value = mock_query_instance
++        mock_query_instance.first.return_value = mock_dog
++        
++        # Act
++        response = self.app.get('/api/dogs/999999/human-age')
++        
++        # Assert
++        self.assertEqual(response.status_code, 200)
++        data = json.loads(response.data)
++        self.assertEqual(data['dog_name'], "Max ID")
++        self.assertEqual(data['dog_age'], 5)
++        self.assertEqual(data['human_age'], 33.0)
++
+ 
+ if __name__ == '__main__':
+     unittest.main()
+\ No newline at end of file
+diff --git a/server/utils/seed_database.py b/server/utils/seed_database.py
+index df27bd7..bbeecd8 100644
+--- a/server/utils/seed_database.py
++++ b/server/utils/seed_database.py
+@@ -1,3 +1,4 @@
++# Standard library imports for file operations, system path manipulation, and data structures
+ import csv
+ import os
+ import sys
+@@ -6,37 +7,59 @@ from datetime import datetime, timedelta
+ from collections import defaultdict
+ 
+ # Add the parent directory to sys.path to allow importing from models
++# This is necessary because we're in the utils/ subdirectory and need to access the models/ directory
+ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ 
++# Flask and database imports
+ from flask import Flask
+ from models import init_db, db, Breed, Dog
+ from models.dog import AdoptionStatus
+ 
+ def create_app():
+-    """Create and configure Flask app for database operations"""
++    """Create and configure Flask app for database operations.
++    
++    This function sets up a minimal Flask application context needed for
++    SQLAlchemy database operations during the seeding process.
++    
++    Returns:
++        Flask: Configured Flask application instance
++    """
+     app = Flask(__name__)
+     
+     # Get the server directory path (one level up from utils)
++    # This ensures the database file is created in the server/ directory
+     server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+     
++    # Configure SQLite database connection
++    # Using SQLite for simplicity - database file will be 'dogshelter.db' in server/
+     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(server_dir, "dogshelter.db")}'
++    # Disable modification tracking to reduce overhead (not needed for seeding)
+     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+     
+-    # Initialize the database with the app
++    # Initialize the database with the app context
++    # This sets up SQLAlchemy to work with our Flask app
+     init_db(app)
+     
+     return app
+ 
+ def create_breeds():
+-    """Seed the database with breeds from the CSV file"""
++    """Seed the database with breeds from the CSV file.
++    
++    This function reads breed data from breeds.csv and populates the Breed table.
++    It includes a check to prevent duplicate seeding if breeds already exist.
++    """
++    # Create Flask app instance to establish database connection
+     app = create_app()
+     
+-    # Path to the CSV file
++    # Construct the path to breeds.csv in the models/ directory
++    # Navigate up two levels from utils/ to server/, then into models/
+     csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                            'models', 'breeds.csv')
+     
++    # Use Flask's app context to enable database operations
+     with app.app_context():
+-        # Check if breeds already exist
++        # Check if breeds already exist to avoid duplicate seeding
++        # This is idempotent - safe to run multiple times
+         existing_breeds = Breed.query.count()
+         if existing_breeds > 0:
+             print(f"Database already contains {existing_breeds} breeds. Skipping seed.")
+@@ -44,40 +67,57 @@ def create_breeds():
+         
+         # Read the CSV file and add breeds to the database
+         with open(csv_path, 'r') as file:
++            # DictReader treats first row as headers, returns each row as a dictionary
+             csv_reader = csv.DictReader(file)
+             for row in csv_reader:
++                # Create a new Breed object from CSV data
++                # CSV columns: 'Breed' and 'Description'
+                 breed = Breed(name=row['Breed'], description=row['Description'])
++                # Add to session (queued for insertion)
+                 db.session.add(breed)
+             
+-            # Commit the changes
++            # Commit all breed insertions to the database in a single transaction
++            # This is more efficient than committing after each breed
+             db.session.commit()
+             
+-        # Verify the seeding
++        # Verify the seeding was successful by counting total breeds
+         breed_count = Breed.query.count()
+         print(f"Successfully seeded {breed_count} breeds to the database.")
+ 
+ def create_dogs():
+-    """Seed the database with dogs from the CSV file, ensuring at least 3 dogs per breed"""
++    """Seed the database with dogs from the CSV file, ensuring at least 3 dogs per breed.
++    
++    This function implements a two-pass algorithm:
++    1. First pass: Ensures each breed gets at least 3 dogs
++    2. Second pass: Randomly distributes remaining dogs across all breeds
++    
++    This approach guarantees diverse representation for each breed while maintaining
++    randomness for the remaining assignments.
++    """
++    # Create Flask app instance to establish database connection
+     app = create_app()
+     
+-    # Path to the CSV file
++    # Construct the path to dogs.csv in the models/ directory
+     csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                            'models', 'dogs.csv')
+     
++    # Use Flask's app context to enable database operations
+     with app.app_context():
+-        # Check if dogs already exist
++        # Check if dogs already exist to avoid duplicate seeding
++        # This is idempotent - safe to run multiple times
+         existing_dogs = Dog.query.count()
+         if existing_dogs > 0:
+             print(f"Database already contains {existing_dogs} dogs. Skipping seed.")
+             return
+         
+-        # Get all breeds from the database
++        # Get all breeds from the database (must be seeded first)
+         breeds = Breed.query.all()
+         if not breeds:
+             print("No breeds found in database. Please seed breeds first.")
+             return
+         
+-        # Track how many dogs are assigned to each breed
++        # Track how many dogs are assigned to each breed for reporting
++        # defaultdict(int) automatically initializes missing keys to 0
+         breed_counts = defaultdict(int)
+         
+         # Read the CSV file
+@@ -102,21 +142,29 @@ def create_dogs():
+             breed_counts[breed_id] += 1
+             return dog
+         
+-        # First pass: assign at least 3 dogs to each breed
++        # FIRST PASS: Assign at least 3 dogs to each breed
++        # This ensures every breed has adequate representation in the database
+         for breed in breeds:
+-            # Get 3 random dogs that haven't been assigned yet
++            # Attempt to assign 3 dogs to this breed
+             for _ in range(3):
++                # Safety check: stop if we've run out of dogs in the CSV
+                 if not dogs_data:
+                     break
+                 
++                # Select a random dog from the remaining unassigned dogs
+                 dog_info = random.choice(dogs_data)
++                # Remove from the pool so it won't be assigned twice
+                 dogs_data.remove(dog_info)
+                 
++                # Create the dog and assign it to this breed
+                 create_dog(dog_info, breed.id)
+         
+-        # Second pass: assign remaining dogs randomly
++        # SECOND PASS: Assign remaining dogs randomly across all breeds
++        # This distributes any leftover dogs without preference
+         for dog_info in dogs_data:
++            # Pick a random breed for this dog
+             breed = random.choice(breeds)
++            # Create the dog and assign it to the chosen breed
+             create_dog(dog_info, breed.id)
+         
+         # Commit all the changes
+@@ -132,9 +180,16 @@ def create_dogs():
+             print(f"Breed '{breed.name}': {count} dogs")
+ 
+ def seed_database():
+-    """Run all seeding functions in the correct order"""
++    """Run all seeding functions in the correct order.
++    
++    ORDER MATTERS: Breeds must be seeded before dogs because dogs have
++    a foreign key relationship to breeds (each dog must belong to a breed).
++    """
++    # Step 1: Seed breeds first (dogs depend on breeds existing)
+     create_breeds()
++    # Step 2: Seed dogs (will reference the breeds created above)
+     create_dogs()
+ 
++# Entry point when script is run directly (not imported)
+ if __name__ == '__main__':
+     seed_database()
+\ No newline at end of file
